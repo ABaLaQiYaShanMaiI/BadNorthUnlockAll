@@ -7,7 +7,7 @@ using HarmonyLib;
 namespace FullUnlockMod
 {
 	// Token: 0x02000002 RID: 2
-	[BepInPlugin("com.shanmai.fullunlock", "Full Unlock Mod", "1.3.0")]
+	[BepInPlugin("com.shanmai.fullunlock", "Full Unlock Mod", "1.3.1")]
 	public class FullUnlockPlugin : BaseUnityPlugin
 	{
 		// Relics & Realms 用 PlayerPrefs 记录宝石解锁，需要在插件启动时单独处理

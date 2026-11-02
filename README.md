@@ -44,6 +44,34 @@ Bad North（北方绝境）的 BepInEx 解锁插件：一键解锁手抄本（�
 - **运行时注入的新特质（如 Bad North Multiplayer 的 6 个自定义特质）**：由 mod 在 `Awake` 里用 `ScriptableObject.CreateInstance<HeroUpgradeDefinition>()` 创建、注册进 `ResourceList<HeroUpgradeDefinition>.list`，再通过它自己的选人界面直接提供，并用 Harmony Prefix 主动屏蔽 `MetaInventory.Add` 使其不落盘。也就是说这类特质"天然永远可选、本来就不需要解锁"，本插件写入时会被对方的 Prefix 拦下，属于预期行为。
 - 本插件对这些注入型定义唯一的动作是把 `upgradeType.canBeStartItem` 置为 `true`（遍历 `ResourceList` 而非 `Resources.LoadAll`，因此也能覆盖注入型定义），只影响信息面板的展示判定，不改变任何数值。
 
+## 解锁覆盖面（v1.3.1 核对结果）
+
+Bad North 里所有"可解锁内容"最终都是 `HeroUpgradeDefinition`（物品 / 特质 / 消耗品 / 技能 / 职业），且必须注册进 `ResourceList<HeroUpgradeDefinition>` 才会被游戏 UI 使用。本插件直接遍历这张表，因此：
+
+| 来源 | 是否需要额外操作 | 说明 |
+| --- | --- | --- |
+| 原版游戏 | 否 | 写入手抄本 + 战役道具池，日志 `原版手抄本和难度已解锁` |
+| 旧灰复燃的战旗（林风柳整合包） | 否 | 其内容烘焙在替换版 `Assembly-CSharp.dll` 中，同样出现在 `ResourceList`，随原版一起解锁 |
+| PlentyTraits / PlentyTraits AxeEnhance（`nacu.*`，走 BNAPI） | 否 | `CustomTraits.RegisterTrait` 会注册进 `ResourceList`；其中 `alwaysUnlocked=false` 的（荆棘、追猎）原本要随进度解锁，本插件直接解锁，日志 `PlentyTraits 已解锁（N 项）` |
+| 只改数值 / 技能 / 敌人的 mod（HeavyShield、ShieldSpear、FireMod、EndlessFinale、Commanders Sail In…） | 不需要 | 它们不新增可解锁定义 |
+| Bad North Multiplayer 的 6 个自定义特质 | 不需要 | 该 mod 用 Harmony Prefix 主动拦截 `MetaInventory.Add` 并在自己的选人界面提供，日志 `Bad North Multiplayer 无需解锁（6 项由该 mod 自行管理）` |
+| Relics & Realms（gwm 的宝石系统） | 否 | 走 PlayerPrefs，由 `RelicUnlockPatch` 处理，日志 `Relics & Realms 已解锁（宝石 20 颗，境界 I-12 已解锁）` |
+
+> 唯一无法自动覆盖的情况：mod 自带独立存档/配置、且完全不经过 `HeroUpgradeDefinition` 与 `PlayerPrefs` —— 这类必须按它自己的机制单独适配（Relics & Realms 就是这种，已适配）。
+
+### 日志示例（装齐 mod 时）
+
+```
+[FullUnlock] 原版手抄本和难度已解锁（58 项：物品/特质/消耗品已全部可作初始装备，极难难度已开启）
+[FullUnlock] PlentyTraits 已解锁（4 项）
+[FullUnlock] Bad North Multiplayer 无需解锁（6 项由该 mod 自行管理）
+[FullUnlock] Relics & Realms 已解锁（宝石 20 颗，境界 I-12 已解锁；本次新写入 20 个键，反射到 20 个定义）
+[FullUnlock] 汇总：共 62 项已解锁（原版 58 项 + mod 4 项），另有 6 项由对应 mod 自行管理，无需任何额外操作
+[FullUnlock] 当前战役道具池已解锁（新增 46 项，可直接购买/升级）
+```
+
+> 数字随所装 mod 变化；mod 名优先取 BepInEx 插件元数据里的 `Name`，已知 GUID 会替换为更常用的简称（如 `nacu.plentytraits` → `PlentyTraits`、`com.gmw.relicselection` → `Relics & Realms`）。若某个 mod 用 `ScriptableObject.CreateInstance<HeroUpgradeDefinition>()`（而非自己的子类）创建条目，这些条目会被归入"原版"计数——只是统计口径问题，解锁行为不受影响。
+
 ## 配置（BepInEx/config/com.shanmai.fullunlock.cfg）
 
 | 段 / 键 | 默认 | 说明 |

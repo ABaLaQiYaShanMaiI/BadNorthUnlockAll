@@ -203,13 +203,14 @@ namespace FullUnlockMod
 			{
 				PlayerPrefs.Save();
 			}
-			string realmText = realmChanged ? ("；境界已全部解锁（I-" + maxRealm + "）") : "";
-			Debug.Log(string.Format("[RelicUnlockPatch] Relics & Realms 宝石已解锁：共 {0} 个键，本次新写入 {1} 个，反射到 {2} 个定义{3}", new object[]
+			string realmText = unlockRealms ? ("，境界 I-" + maxRealm + " 已解锁") : "";
+			int reflectedCount = reflected;
+			Debug.Log(string.Format("[FullUnlock] Relics & Realms 已解锁（宝石 {0} 颗{1}；本次新写入 {2} 个键，反射到 {3} 个定义）", new object[]
 			{
 				keys.Count,
+				realmText,
 				changed,
-				reflected,
-				realmText
+				reflectedCount
 			}));
 			return reflected;
 		}
