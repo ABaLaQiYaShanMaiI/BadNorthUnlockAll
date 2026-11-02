@@ -1,0 +1,29 @@
+# Visual Studio / MSBuild build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+
+# User-specific and generated files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.csproj.user
+*.pidb
+*.svclog
+
+# ReSharper / Rider
+_ReSharper*/
+*.DotSettings.user
+.idea/
+
+# NuGet
+packages/
+*.nupkg
+
+# OS junk
+Thumbs.db
+desktop.ini
+.DS_Store
