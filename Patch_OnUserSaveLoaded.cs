@@ -15,6 +15,12 @@ namespace FullUnlockMod
 			Debug.Log("[FullUnlockPatch] OnUserSaveLoaded Postfix triggered");
 			FullUnlockPatch.ApplyFullUnlock();
 			FullUnlockPatch.UnlockVeryHardDifficulty();
+			bool flag = FullUnlockPlugin.UnlockRelics != null && FullUnlockPlugin.UnlockRelics.Value;
+			if (flag)
+			{
+				bool unlockRealms = FullUnlockPlugin.UnlockRealms != null && FullUnlockPlugin.UnlockRealms.Value;
+				RelicUnlockPatch.Apply(unlockRealms);
+			}
 		}
 	}
 }
