@@ -10,7 +10,17 @@ Bad North（北方绝境）的 BepInEx 解锁插件：一键解锁手抄本（�
 | 原版手抄本全解锁 | Harmony 补丁 `Profile.OnUserSaveLoaded` → 遍历 `ResourceList<HeroUpgradeDefinition>`，把每项升到最高级并通过 `MetaInventory.Add` 写入存档 |
 | 全部装备可作为初始装备 | 把每个 `HeroUpgradeDefinition.upgradeType.canBeStartItem` 置为 `true` |
 | 解锁极难难度 | `userSave.maxDifficulty = Difficulty.VeryHard` 并保存 |
+| 战役内道具池 | 照抄游戏自带的控制台命令 `Inventory.AddAll`：同时写 `campaign.inventory`，进行中的战役也立刻全部可购买/升级 |
 | Relics & Realms 宝石解锁 | 该类 mod 不走原版手抄本体系，改用 Unity `PlayerPrefs` 存解锁状态，见下文 |
+
+## 两套库存的区别（为什么两处都要写）
+
+| | 数据结构 | 读取方 | 作用 |
+| --- | --- | --- | --- |
+| `Profile.userSave.inventory` | `MetaInventory`（进存档的 `UpgradeEntry` 列表 + 运行时 `startingItems` / `startingTraits`） | 新游戏界面（`NewGameOptionsPopup`）、开局特质分配（`HeroTraitAssigner`） | 手抄本：决定"新开一局时能选什么" |
+| `Profile.campaign.inventory` | `List<SerializableHeroUpgrade>` | 战役内升级界面（`SuperUpgradesCampaignProxy` → `IUpgradesProxy.inventory`） | 决定"当前这局能买/升级什么" |
+
+所以只写第一处的话，老存档（进行中的战役）里拿不到新解锁的道具；本插件按游戏自带作弊命令的做法两处都写，且用"引用变化才追加"的轮询来覆盖新建 / 读档 / 切档，玩家不需要做任何操作。
 
 ## 关于 Relics & Realms（4.0.0）
 
@@ -27,6 +37,12 @@ Bad North（北方绝境）的 BepInEx 解锁插件：一键解锁手抄本（�
 3. 把这些键写为 `1`，并按配置写入 `RealmUnlocked`，最后 `PlayerPrefs.Save()`。
 
 由于该 mod 每帧用 `IsUnlocked()` 重算界面签名，解锁在运行期即刻生效，无需重启游戏。未安装该 mod 时不会改动任何 `PlayerPrefs`。
+
+## 与其它 mod 注入的特质 / 道具的关系
+
+- **原版特质重做（Vanilla Traits Overhaul 一类）**：就地改写原版 `Hero_Trait_*` 定义的文本与数值，ID 不变，本插件的手抄本循环已经覆盖，无需额外处理。
+- **运行时注入的新特质（如 Bad North Multiplayer 的 6 个自定义特质）**：由 mod 在 `Awake` 里用 `ScriptableObject.CreateInstance<HeroUpgradeDefinition>()` 创建、注册进 `ResourceList<HeroUpgradeDefinition>.list`，再通过它自己的选人界面直接提供，并用 Harmony Prefix 主动屏蔽 `MetaInventory.Add` 使其不落盘。也就是说这类特质"天然永远可选、本来就不需要解锁"，本插件写入时会被对方的 Prefix 拦下，属于预期行为。
+- 本插件对这些注入型定义唯一的动作是把 `upgradeType.canBeStartItem` 置为 `true`（遍历 `ResourceList` 而非 `Resources.LoadAll`，因此也能覆盖注入型定义），只影响信息面板的展示判定，不改变任何数值。
 
 ## 配置（BepInEx/config/com.shanmai.fullunlock.cfg）
 

@@ -7,7 +7,7 @@ using HarmonyLib;
 namespace FullUnlockMod
 {
 	// Token: 0x02000002 RID: 2
-	[BepInPlugin("com.shanmai.fullunlock", "Full Unlock Mod", "1.2.0")]
+	[BepInPlugin("com.shanmai.fullunlock", "Full Unlock Mod", "1.3.0")]
 	public class FullUnlockPlugin : BaseUnityPlugin
 	{
 		// Relics & Realms 用 PlayerPrefs 记录宝石解锁，需要在插件启动时单独处理
@@ -29,6 +29,13 @@ namespace FullUnlockMod
 				base.StartCoroutine(RelicUnlockPatch.ApplyRoutine(FullUnlockPlugin.UnlockRealms.Value));
 			}
 			base.Logger.LogInfo("Full Unlock Mod has been patched!");
+		}
+
+		// 战役（CampaignSave）在新建 / 读档时才会出现，且比插件加载晚，
+		// 所以每帧只做一次"引用是否变化"的廉价判断，变化时自动补解锁，玩家无需任何操作。
+		private void Update()
+		{
+			FullUnlockPatch.TickCampaignUnlock();
 		}
 	}
 }
