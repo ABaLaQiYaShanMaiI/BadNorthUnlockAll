@@ -6,14 +6,10 @@ using UnityEngine;
 
 namespace FullUnlockMod
 {
-	// Relics & Realms（BepInEx GUID: com.gmw.relicselection）的解锁方式与原版手抄本完全不同：
-	// 它不使用 MetaInventory / HeroUpgradeDefinition，而是把每颗宝石（Relic）的解锁状态
-	// 直接写进 Unity PlayerPrefs：
-	//   * 宝石：key = RelicDef.unlockKey（4.0.0 中为 "Relic_Unlocked_<名字>"），值为 1 表示已解锁，
-	//     判定处为 IsUnlocked(def) => PlayerPrefs.GetInt(def.unlockKey, 0) == 1；
-	//   * 境界：key = "RealmUnlocked"，取值 1~12（RomanNumerals.Length），由 GetUnlockedRealm() 读取。
-	// 该 mod 自带的调试键 F9 也只是把这两类键写成全解锁（RelicPlugin.Update，默认 EnableDebugKeys=false）。
-	// 它每帧用 IsUnlocked 重算签名刷新界面，所以运行期写入 PlayerPrefs 会立刻生效，无需重启游戏。
+	// Relics & Realms（GUID: com.gmw.relicselection）不走手抄本体系，改用 PlayerPrefs 存解锁状态：
+	// 宝石 = RelicDef.unlockKey（4.0.0 即 "Relic_Unlocked_<名字>"，值为 1 表示已解锁），
+	// 境界 = "RealmUnlocked"（1~12，取自 RomanNumerals.Length）。
+	// 该 mod 每帧用 IsUnlocked 重算界面签名，所以运行期写入立即生效。
 	public static class RelicUnlockPatch
 	{
 		private const string RealmKey = "RealmUnlocked";
@@ -24,41 +20,19 @@ namespace FullUnlockMod
 
 		private const string RelicPluginTypeName = "RelicSelectionMod.RelicPlugin";
 
-		// Relics & Realms 4.0.0 的 20 个 RelicDef.unlockKey 后缀。
-		// 用于插件加载顺序导致 mod 静态定义表（defs）尚未初始化时的兜底。
+		// 4.0.0 的 20 个 RelicDef.unlockKey 后缀，作为反射拿不到定义表时的兜底
 		private static readonly string[] KnownRelicNames = new string[]
 		{
-			"Ruby",
-			"Sapphire",
-			"Emerald",
-			"Topaz",
-			"Aquamarine",
-			"Amethyst",
-			"Onyx",
-			"Opal",
-			"Garnet",
-			"Citrine",
-			"Amber",
-			"Tourmaline",
-			"Pyrite",
-			"Moonstone",
-			"Obsidian1",
-			"Obsidian2",
-			"Obsidian3",
-			"Obsidian4",
-			"Diamond",
-			"Bloodstone"
+			"Ruby", "Sapphire", "Emerald", "Topaz", "Aquamarine",
+			"Amethyst", "Onyx", "Opal", "Garnet", "Citrine",
+			"Amber", "Tourmaline", "Pyrite", "Moonstone",
+			"Obsidian1", "Obsidian2", "Obsidian3", "Obsidian4",
+			"Diamond", "Bloodstone"
 		};
 
 		private static bool reflectionWarned;
 
-		public static bool IsRelicModLoaded()
-		{
-			return FindRelicPluginType() != null;
-		}
-
-		// 在所有已加载程序集中查找 Relics & Realms 的插件类型。
-		// BepInEx 会在调用各插件 Awake 之前就把插件程序集全部加载好，因此这里可以跨插件顺序找到它。
+		// BepInEx 会在插件 Awake 之前加载好全部插件程序集，所以可跨加载顺序找到该类型
 		private static Type FindRelicPluginType()
 		{
 			try
@@ -89,8 +63,7 @@ namespace FullUnlockMod
 			return null;
 		}
 
-		// 反射读取 mod 自己的 RelicDef[] defs，取出每个定义的 unlockKey。
-		// 这样即使将来版本新增宝石（键名变化），也无需改本插件。
+		// 反射读取 mod 的 RelicDef[] defs，取出每个 unlockKey，兼容后续版本新增宝石
 		private static List<string> GetModUnlockKeys(Type pluginType)
 		{
 			List<string> keys = new List<string>();
@@ -136,7 +109,7 @@ namespace FullUnlockMod
 			return keys;
 		}
 
-		// 反射读取 RomanNumerals 的长度，得到当前版本的最大境界数（4.0.0 为 12）。
+		// 反射 RomanNumerals 长度得到当前版本境界数（4.0.0 为 12）
 		private static int GetMaxRealm(Type pluginType)
 		{
 			if (pluginType != null)
@@ -161,8 +134,7 @@ namespace FullUnlockMod
 			return DefaultMaxRealm;
 		}
 
-		// 把全部宝石与境界写入 PlayerPrefs。
-		// 返回值：反射到的宝石定义数量；-1 表示未检测到 Relics & Realms（未做任何修改）。
+		// 写入全部宝石与境界；返回反射到的宝石定义数，-1 表示未检测到 Relics & Realms
 		public static int Apply(bool unlockRealms)
 		{
 			Type pluginType = FindRelicPluginType();
@@ -204,19 +176,17 @@ namespace FullUnlockMod
 				PlayerPrefs.Save();
 			}
 			string realmText = unlockRealms ? ("，境界 I-" + maxRealm + " 已解锁") : "";
-			int reflectedCount = reflected;
 			Debug.Log(string.Format("[FullUnlock] Relics & Realms 已解锁（宝石 {0} 颗{1}；本次新写入 {2} 个键，反射到 {3} 个定义）", new object[]
 			{
 				keys.Count,
 				realmText,
 				changed,
-				reflectedCount
+				reflected
 			}));
 			return reflected;
 		}
 
-		// BepInEx 不保证插件 Awake 的先后顺序，Relics & Realms 的静态定义表（defs）可能还没建好，
-		// 因此先按已知列表兜底写入，再在几秒内轮询，直到能反射到它自己的定义表为止。
+		// 定义表可能尚未初始化：先按已知列表兜底写入，再轮询到能反射到它自己的定义表为止
 		public static IEnumerator ApplyRoutine(bool unlockRealms)
 		{
 			for (int attempt = 0; attempt < 10; attempt++)
@@ -224,12 +194,10 @@ namespace FullUnlockMod
 				int reflected = Apply(unlockRealms);
 				if (reflected < 0)
 				{
-					// 没装 Relics & Realms，什么都不做
 					yield break;
 				}
 				if (reflected > 0)
 				{
-					// 已用 mod 自己的定义表校准过，全部宝石键都已覆盖
 					yield break;
 				}
 				yield return new WaitForSeconds(3f);

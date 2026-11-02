@@ -9,13 +9,10 @@ using Voxels.TowerDefense.ProfileInternals;
 
 namespace FullUnlockMod
 {
-	// 解锁主流程（装上即全部生效，玩家不需要任何按键或配置）：
-	// 1) 手抄本：把 ResourceList<HeroUpgradeDefinition> 里的每一项都写进 Profile.userSave.inventory，
-	//    Item / Trait / Consumable 标记为初始装备 —— 原版定义和 mod 注入的定义走同一条路径；
-	// 2) 战役内可购池：对齐游戏自带控制台命令 Inventory.AddAll，写 Profile.campaign.inventory；
-	// 3) 极难难度；
-	// 4) Relics & Realms 的宝石 / 境界由 RelicUnlockPatch 走 PlayerPrefs。
-	// 日志按"原版"和"具体 mod"分别输出，未列出的 mod 直接用其 BepInEx 插件名。
+	// 解锁主流程，装上即生效，玩家不需要任何按键或配置：
+	// 1. 手抄本：ResourceList<HeroUpgradeDefinition> 每项写入 userSave.inventory，Item/Trait/Consumable 标记为初始装备；
+	// 2. 战役道具池：对齐游戏内置命令 Inventory.AddAll，写 campaign.inventory；
+	// 3. 极难难度；4. Relics & Realms 宝石由 RelicUnlockPatch 走 PlayerPrefs。
 	public static class FullUnlockPatch
 	{
 		private sealed class ModTally
@@ -25,7 +22,7 @@ namespace FullUnlockMod
 			public int blocked;
 		}
 
-		// 常见 mod 的显示名（键为 BepInEx GUID）
+		// 常见 mod 的显示名（键为 BepInEx GUID），未列出的用插件元数据里的 Name
 		private static readonly Dictionary<string, string> KnownModNames = new Dictionary<string, string>
 		{
 			{ "nacu.bnapi", "BN Mod API" },
@@ -42,17 +39,16 @@ namespace FullUnlockMod
 			{ "com.bananasplit.badnorthmp", "Bad North Multiplayer" }
 		};
 
-		// 战役对象（CampaignSave）每换一次就补一次解锁
+		// 当前战役；引用变化（新建 / 读档 / 切档）时补一次解锁
 		private static CampaignSave watchedCampaign;
 
 		public static void ApplyFullUnlock()
 		{
-			Debug.Log("[FullUnlockPatch] ApplyFullUnlock start");
 			try
 			{
 				UserSave userSave = Profile.userSave;
-				bool flag = userSave == null || userSave.inventory == null;
-				if (flag)
+				bool notLoaded = userSave == null || userSave.inventory == null;
+				if (notLoaded)
 				{
 					Debug.Log("[FullUnlockPatch] userSave 尚未加载，跳过本次解锁");
 					return;
@@ -63,76 +59,70 @@ namespace FullUnlockMod
 				Dictionary<Assembly, ModTally> tallies = new Dictionary<Assembly, ModTally>();
 				foreach (HeroUpgradeDefinition definition in ResourceList<HeroUpgradeDefinition>.list)
 				{
-					bool flag2 = definition == null;
-					if (flag2)
+					// 单个畸形定义不应中断整体解锁
+					try
 					{
-						continue;
-					}
-					HeroUpgradeTypeEnum typeEnum = definition.typeEnum;
-					bool isStarting = typeEnum == HeroUpgradeTypeEnum.Item || typeEnum == HeroUpgradeTypeEnum.Trait || typeEnum == HeroUpgradeTypeEnum.Consumable;
-					int level = Math.Max(0, definition.numLevels - 1);
-					inventory.Add(definition, level, isStarting);
-					bool flag3 = definition.upgradeType != null;
-					if (flag3)
-					{
+						bool invalid = definition == null || definition.upgradeType == null;
+						if (invalid)
+						{
+							continue;
+						}
+						HeroUpgradeTypeEnum typeEnum = definition.typeEnum;
+						bool isStarting = typeEnum == HeroUpgradeTypeEnum.Item || typeEnum == HeroUpgradeTypeEnum.Trait || typeEnum == HeroUpgradeTypeEnum.Consumable;
+						inventory.Add(definition, Math.Max(0, definition.numLevels - 1), isStarting);
 						definition.upgradeType.canBeStartItem = true;
-					}
-					// 写入后回查一次：若某个 mod 主动拦截 MetaInventory.Add（例如 Bad North MP 的自定义特质），
-					// 这里能立刻识别出来，日志就不会谎报"已解锁"。
-					bool added = IsInInventory(inventory, definition);
-					Assembly assembly = definition.GetType().Assembly;
-					bool flag4 = assembly == typeof(HeroUpgradeDefinition).Assembly;
-					if (flag4)
-					{
-						bool flag5 = added;
-						if (flag5)
+						bool added = IsInInventory(inventory, definition);
+						Assembly assembly = definition.GetType().Assembly;
+						bool isVanilla = assembly == typeof(HeroUpgradeDefinition).Assembly;
+						if (isVanilla)
 						{
-							vanilla++;
+							if (added)
+							{
+								vanilla++;
+							}
+							continue;
 						}
-					}
-					else
-					{
-						ModTally modTally;
-						bool flag6 = !tallies.TryGetValue(assembly, out modTally);
-						if (flag6)
+						ModTally tally;
+						bool first = !tallies.TryGetValue(assembly, out tally);
+						if (first)
 						{
-							modTally = new ModTally();
-							tallies.Add(assembly, modTally);
+							tally = new ModTally();
+							tallies.Add(assembly, tally);
 						}
-						bool flag7 = added;
-						if (flag7)
+						if (added)
 						{
-							modTally.unlocked++;
+							tally.unlocked++;
 						}
 						else
 						{
-							modTally.blocked++;
+							tally.blocked++;
 						}
 					}
-				}
-				string text = veryHard ? "，极难难度已开启" : "";
-				Debug.Log(string.Format("[FullUnlock] 原版手抄本和难度已解锁（{0} 项：物品/特质/消耗品已全部可作初始装备{1}）", vanilla, text));
-				foreach (KeyValuePair<Assembly, ModTally> keyValuePair in tallies)
-				{
-					string modName = GetModName(keyValuePair.Key);
-					ModTally value = keyValuePair.Value;
-					bool flag8 = value.unlocked > 0;
-					if (flag8)
+					catch (Exception ex)
 					{
-						string text2 = value.blocked > 0 ? ("，" + value.blocked + " 项由该 mod 自行管理") : "";
-						Debug.Log(string.Format("[FullUnlock] {0} 已解锁（{1} 项{2}）", modName, value.unlocked, text2));
+						string name = definition != null ? definition.name : "<null>";
+						Debug.LogWarning("[FullUnlockPatch] 跳过异常定义 " + name + "：" + ex.Message);
+					}
+				}
+				string difficultyText = veryHard ? "，极难难度已开启" : "";
+				Debug.Log(string.Format("[FullUnlock] 原版手抄本和难度已解锁（{0} 项：物品/特质/消耗品已全部可作初始装备{1}）", vanilla, difficultyText));
+				int modUnlocked = 0;
+				int modBlocked = 0;
+				foreach (KeyValuePair<Assembly, ModTally> pair in tallies)
+				{
+					modUnlocked += pair.Value.unlocked;
+					modBlocked += pair.Value.blocked;
+					string modName = GetModName(pair.Key);
+					bool any = pair.Value.unlocked > 0;
+					if (any)
+					{
+						string extra = pair.Value.blocked > 0 ? ("，" + pair.Value.blocked + " 项由该 mod 自行管理") : "";
+						Debug.Log(string.Format("[FullUnlock] {0} 已解锁（{1} 项{2}）", modName, pair.Value.unlocked, extra));
 					}
 					else
 					{
-						Debug.Log(string.Format("[FullUnlock] {0} 无需解锁（{1} 项由该 mod 自行管理）", modName, value.blocked));
+						Debug.Log(string.Format("[FullUnlock] {0} 无需解锁（{1} 项由该 mod 自行管理）", modName, pair.Value.blocked));
 					}
-				}
-				int modUnlocked = 0;
-				int modBlocked = 0;
-				foreach (KeyValuePair<Assembly, ModTally> keyValuePair2 in tallies)
-				{
-					modUnlocked += keyValuePair2.Value.unlocked;
-					modBlocked += keyValuePair2.Value.blocked;
 				}
 				Debug.Log(string.Format("[FullUnlock] 汇总：共 {0} 项已解锁（原版 {1} 项 + mod {2} 项），另有 {3} 项由对应 mod 自行管理，无需任何额外操作", vanilla + modUnlocked, vanilla, modUnlocked, modBlocked));
 				TickCampaignUnlock();
@@ -143,19 +133,19 @@ namespace FullUnlockMod
 			}
 		}
 
-		// 极难难度。返回 true 表示当前已经是 VeryHard（本次开启或本来就已开启）。
+		// 返回 true 表示当前已是 VeryHard（本次开启或本来就已开启）
 		private static bool UnlockVeryHardDifficulty()
 		{
 			try
 			{
 				UserSave userSave = Profile.userSave;
-				bool flag = userSave == null;
-				if (flag)
+				bool notLoaded = userSave == null;
+				if (notLoaded)
 				{
 					return false;
 				}
-				bool flag2 = userSave.maxDifficulty == Difficulty.VeryHard;
-				if (flag2)
+				bool already = userSave.maxDifficulty == Difficulty.VeryHard;
+				if (already)
 				{
 					return true;
 				}
@@ -171,56 +161,55 @@ namespace FullUnlockMod
 			}
 		}
 
-		// 战役内的"可购买池"是 CampaignSave.inventory（List<SerializableHeroUpgrade>），
-		// 与手抄本 userSave.inventory（MetaInventory）是两套独立数据：前者由战役升级界面
-		// （SuperUpgradesCampaignProxy）读取，后者由新游戏选人界面读取。
-		// 游戏自带的控制台命令 Inventory.AddAll 会把道具同时写进这两边，这里照做，
-		// 这样进行中的战役也无需重开就能拿到全部道具。
+		// 战役道具池（campaign.inventory）与手抄本（userSave.inventory）是两套数据，
+		// 这里按 Profile.campaign 引用变化补写，覆盖新建 / 读档 / 切档。
 		public static void TickCampaignUnlock()
 		{
 			CampaignSave campaign = Profile.campaign;
-			bool flag = campaign == null || campaign == watchedCampaign;
-			if (!flag)
+			bool sameOrNone = campaign == null || campaign == watchedCampaign;
+			if (sameOrNone)
 			{
-				watchedCampaign = campaign;
-				ApplyCampaignUnlock(campaign);
+				return;
 			}
+			watchedCampaign = campaign;
+			ApplyCampaignUnlock(campaign);
 		}
 
 		public static void ApplyCampaignUnlock(CampaignSave campaign)
 		{
 			try
 			{
-				bool flag = campaign == null || campaign.inventory == null;
-				if (flag)
+				bool notLoaded = campaign == null || campaign.inventory == null;
+				if (notLoaded)
 				{
 					return;
 				}
-				int num = 0;
-				foreach (HeroUpgradeDefinition heroUpgradeDefinition in ResourceList<HeroUpgradeDefinition>.list)
+				int count = 0;
+				foreach (HeroUpgradeDefinition definition in ResourceList<HeroUpgradeDefinition>.list)
 				{
-					bool flag2 = heroUpgradeDefinition == null || heroUpgradeDefinition.upgradeType == null;
-					if (flag2)
+					bool invalid = definition == null || definition.upgradeType == null;
+					if (invalid)
 					{
 						continue;
 					}
-					HeroUpgradeTypeEnum typeEnum = heroUpgradeDefinition.typeEnum;
-					bool flag3 = typeEnum == HeroUpgradeTypeEnum.Item || typeEnum == HeroUpgradeTypeEnum.Consumable;
-					if (!flag3)
+					HeroUpgradeTypeEnum typeEnum = definition.typeEnum;
+					bool purchasable = typeEnum == HeroUpgradeTypeEnum.Item || typeEnum == HeroUpgradeTypeEnum.Consumable;
+					if (!purchasable)
 					{
 						continue;
 					}
-					bool flag4 = CampaignHas(campaign, heroUpgradeDefinition);
-					if (!flag4)
+					bool exists = CampaignHas(campaign, definition);
+					if (exists)
 					{
-						campaign.inventory.Add(heroUpgradeDefinition);
-						num++;
+						continue;
 					}
+					campaign.inventory.Add(definition);
+					count++;
 				}
-				bool flag5 = num > 0;
-				if (flag5)
+				bool added = count > 0;
+				if (added)
 				{
-					Debug.Log(string.Format("[FullUnlock] 当前战役道具池已解锁（新增 {0} 项，可直接购买/升级）", num));
+					Debug.Log(string.Format("[FullUnlock] 当前战役道具池已解锁（新增 {0} 项，可直接购买/升级）", count));
 				}
 			}
 			catch (Exception ex)
@@ -231,11 +220,13 @@ namespace FullUnlockMod
 
 		private static bool CampaignHas(CampaignSave campaign, HeroUpgradeDefinition definition)
 		{
+			string uniqueId = definition.uniqueId;
 			for (int i = 0; i < campaign.inventory.Count; i++)
 			{
-				SerializableHeroUpgrade serializableHeroUpgrade = campaign.inventory[i];
-				bool flag = serializableHeroUpgrade != null && serializableHeroUpgrade.definition == definition;
-				if (flag)
+				SerializableHeroUpgrade entry = campaign.inventory[i];
+				// 按 uniqueId 比较：读档后 definition 可能被重新解析成新实例，引用比较会漏判
+				bool match = entry != null && entry.definition != null && entry.definition.uniqueId == uniqueId;
+				if (match)
 				{
 					return true;
 				}
@@ -243,6 +234,7 @@ namespace FullUnlockMod
 			return false;
 		}
 
+		// 回查写入结果：被 mod 的 Harmony Prefix 拦掉时返回 false
 		private static bool IsInInventory(MetaInventory inventory, HeroUpgradeDefinition definition)
 		{
 			int level;
@@ -251,42 +243,42 @@ namespace FullUnlockMod
 			return inventory.Get(definition, out level, out isNew, out isStarting);
 		}
 
-		// 解析某个程序集对应的 mod 显示名：优先用 BepInEx 插件元数据（GUID/Name），
-		// 已知 GUID 走别名表，实在找不到就退回程序集名。
+		// mod 显示名：优先 BepInEx 元数据（已知 GUID 用别名），否则退回程序集名
 		private static string GetModName(Assembly assembly)
 		{
 			try
 			{
 				foreach (PluginInfo pluginInfo in Chainloader.PluginInfos.Values)
 				{
-					bool flag = pluginInfo == null || pluginInfo.Instance == null;
-					if (!flag)
+					bool usable = pluginInfo != null && pluginInfo.Instance != null;
+					if (!usable)
 					{
-						bool flag2 = pluginInfo.Instance.GetType().Assembly == assembly;
-						if (flag2)
-						{
-							BepInPlugin metadata = pluginInfo.Metadata;
-							string text = metadata != null ? metadata.GUID : null;
-							string text2 = metadata != null ? metadata.Name : null;
-							string text3 = null;
-							bool flag3 = text != null;
-							if (flag3)
-							{
-								KnownModNames.TryGetValue(text, out text3);
-							}
-							bool flag4 = text3 != null;
-							if (flag4)
-							{
-								return text3;
-							}
-							bool flag5 = !string.IsNullOrEmpty(text2);
-							if (flag5)
-							{
-								return text2;
-							}
-							break;
-						}
+						continue;
 					}
+					bool sameAssembly = pluginInfo.Instance.GetType().Assembly == assembly;
+					if (!sameAssembly)
+					{
+						continue;
+					}
+					BepInPlugin metadata = pluginInfo.Metadata;
+					string guid = metadata != null ? metadata.GUID : null;
+					string name = metadata != null ? metadata.Name : null;
+					string alias = null;
+					if (guid != null)
+					{
+						KnownModNames.TryGetValue(guid, out alias);
+					}
+					bool hasAlias = alias != null;
+					if (hasAlias)
+					{
+						return alias;
+					}
+					bool hasName = !string.IsNullOrEmpty(name);
+					if (hasName)
+					{
+						return name;
+					}
+					break;
 				}
 			}
 			catch (Exception ex)
