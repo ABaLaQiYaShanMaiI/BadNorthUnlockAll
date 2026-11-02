@@ -41,12 +41,14 @@ namespace FullUnlockMod
 				for (int i = 0; i < assemblies.Length; i++)
 				{
 					Assembly assembly = assemblies[i];
-					if (assembly == null)
+					bool invalid = (object)assembly == null;
+					if (invalid)
 					{
 						continue;
 					}
 					Type type = assembly.GetType(RelicPluginTypeName, false);
-					if (type != null)
+					bool found = (object)type != null;
+					if (found)
 					{
 						return type;
 					}
@@ -67,14 +69,16 @@ namespace FullUnlockMod
 		private static List<string> GetModUnlockKeys(Type pluginType)
 		{
 			List<string> keys = new List<string>();
-			if (pluginType == null)
+			bool noType = (object)pluginType == null;
+			if (noType)
 			{
 				return keys;
 			}
 			try
 			{
 				FieldInfo defsField = pluginType.GetField("defs", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-				if (defsField == null)
+				bool noDefsField = (object)defsField == null;
+				if (noDefsField)
 				{
 					return keys;
 				}
@@ -91,7 +95,8 @@ namespace FullUnlockMod
 						continue;
 					}
 					FieldInfo keyField = def.GetType().GetField("unlockKey", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-					if (keyField == null)
+					bool noKeyField = (object)keyField == null;
+					if (noKeyField)
 					{
 						continue;
 					}
@@ -112,12 +117,14 @@ namespace FullUnlockMod
 		// 反射 RomanNumerals 长度得到当前版本境界数（4.0.0 为 12）
 		private static int GetMaxRealm(Type pluginType)
 		{
-			if (pluginType != null)
+			bool hasType = (object)pluginType != null;
+			if (hasType)
 			{
 				try
 				{
 					FieldInfo field = pluginType.GetField("RomanNumerals", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-					if (field != null)
+					bool hasField = (object)field != null;
+					if (hasField)
 					{
 						Array romanNumerals = field.GetValue(null) as Array;
 						if (romanNumerals != null && romanNumerals.Length > 0)
@@ -138,7 +145,8 @@ namespace FullUnlockMod
 		public static int Apply(bool unlockRealms)
 		{
 			Type pluginType = FindRelicPluginType();
-			if (pluginType == null)
+			bool noType = (object)pluginType == null;
+			if (noType)
 			{
 				return -1;
 			}
@@ -191,16 +199,26 @@ namespace FullUnlockMod
 		{
 			for (int attempt = 0; attempt < 10; attempt++)
 			{
-				int reflected = Apply(unlockRealms);
-				if (reflected < 0)
+				int reflected;
+				try
 				{
+					reflected = Apply(unlockRealms);
+				}
+				catch (Exception ex)
+				{
+					Debug.LogError("[RelicUnlockPatch] 写入宝石解锁状态失败：" + ((ex != null) ? ex.ToString() : null));
 					yield break;
 				}
-				if (reflected > 0)
+				if (reflected <= 0)
 				{
-					yield break;
+					if (reflected < 0)
+					{
+						yield break;
+					}
+					yield return new WaitForSeconds(3f);
+					continue;
 				}
-				yield return new WaitForSeconds(3f);
+				yield break;
 			}
 		}
 	}

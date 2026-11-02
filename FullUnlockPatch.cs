@@ -73,7 +73,8 @@ namespace FullUnlockMod
 						definition.upgradeType.canBeStartItem = true;
 						bool added = IsInInventory(inventory, definition);
 						Assembly assembly = definition.GetType().Assembly;
-						bool isVanilla = assembly == typeof(HeroUpgradeDefinition).Assembly;
+						// 用 ReferenceEquals：Unity 的 .NET 2.0 Mono 里没有 Assembly.op_Equality
+						bool isVanilla = object.ReferenceEquals(assembly, typeof(HeroUpgradeDefinition).Assembly);
 						if (isVanilla)
 						{
 							if (added)
@@ -255,7 +256,7 @@ namespace FullUnlockMod
 					{
 						continue;
 					}
-					bool sameAssembly = pluginInfo.Instance.GetType().Assembly == assembly;
+					bool sameAssembly = object.ReferenceEquals(pluginInfo.Instance.GetType().Assembly, assembly);
 					if (!sameAssembly)
 					{
 						continue;

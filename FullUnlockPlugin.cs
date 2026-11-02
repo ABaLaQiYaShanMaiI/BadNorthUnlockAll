@@ -4,7 +4,7 @@ using HarmonyLib;
 
 namespace FullUnlockMod
 {
-	[BepInPlugin("com.shanmai.fullunlock", "Full Unlock Mod", "1.3.2")]
+	[BepInPlugin("com.shanmai.fullunlock", "Full Unlock Mod", "1.3.3")]
 	public class FullUnlockPlugin : BaseUnityPlugin
 	{
 		// Relics & Realms 用 PlayerPrefs 记录解锁，需在插件启动时单独处理
