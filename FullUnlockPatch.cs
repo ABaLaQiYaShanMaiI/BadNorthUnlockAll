@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Bootstrap;
-using UnityEngine;
 using Voxels.TowerDefense;
 using Voxels.TowerDefense.ProfileInternals;
 
@@ -50,13 +49,14 @@ namespace FullUnlockMod
 				bool notLoaded = userSave == null || userSave.inventory == null;
 				if (notLoaded)
 				{
-					Debug.Log("[FullUnlockPatch] userSave 尚未加载，跳过本次解锁");
+					ModLog.Info("[FullUnlockPatch] userSave 尚未加载，跳过本次解锁");
 					return;
 				}
 				MetaInventory inventory = userSave.inventory;
 				bool veryHard = UnlockVeryHardDifficulty();
 				int vanilla = 0;
 				Dictionary<Assembly, ModTally> tallies = new Dictionary<Assembly, ModTally>();
+				bool dumpList = FullUnlockPlugin.DumpUnlocked != null && FullUnlockPlugin.DumpUnlocked.Value;
 				foreach (HeroUpgradeDefinition definition in ResourceList<HeroUpgradeDefinition>.list)
 				{
 					// 单个畸形定义不应中断整体解锁
@@ -73,6 +73,10 @@ namespace FullUnlockMod
 						definition.upgradeType.canBeStartItem = true;
 						bool added = IsInInventory(inventory, definition);
 						Assembly assembly = definition.GetType().Assembly;
+						if (dumpList)
+						{
+							ModLog.Info(string.Format("[FullUnlock] + {0} | {1} | {2} | 写入成功={3}", definition.name, typeEnum, assembly.GetName().Name, added));
+						}
 						// 用 ReferenceEquals：Unity 的 .NET 2.0 Mono 里没有 Assembly.op_Equality
 						bool isVanilla = object.ReferenceEquals(assembly, typeof(HeroUpgradeDefinition).Assembly);
 						if (isVanilla)
@@ -102,11 +106,11 @@ namespace FullUnlockMod
 					catch (Exception ex)
 					{
 						string name = definition != null ? definition.name : "<null>";
-						Debug.LogWarning("[FullUnlockPatch] 跳过异常定义 " + name + "：" + ex.Message);
+						ModLog.Warn("[FullUnlockPatch] 跳过异常定义 " + name + "：" + ex.Message);
 					}
 				}
 				string difficultyText = veryHard ? "，极难难度已开启" : "";
-				Debug.Log(string.Format("[FullUnlock] 原版手抄本和难度已解锁（{0} 项：物品/特质/消耗品已全部可作初始装备{1}）", vanilla, difficultyText));
+				ModLog.Info(string.Format("[FullUnlock] 原版手抄本和难度已解锁（{0} 项：物品/特质/消耗品已全部可作初始装备{1}）", vanilla, difficultyText));
 				int modUnlocked = 0;
 				int modBlocked = 0;
 				foreach (KeyValuePair<Assembly, ModTally> pair in tallies)
@@ -118,19 +122,19 @@ namespace FullUnlockMod
 					if (any)
 					{
 						string extra = pair.Value.blocked > 0 ? ("，" + pair.Value.blocked + " 项由该 mod 自行管理") : "";
-						Debug.Log(string.Format("[FullUnlock] {0} 已解锁（{1} 项{2}）", modName, pair.Value.unlocked, extra));
+						ModLog.Info(string.Format("[FullUnlock] {0} 已解锁（{1} 项{2}）", modName, pair.Value.unlocked, extra));
 					}
 					else
 					{
-						Debug.Log(string.Format("[FullUnlock] {0} 无需解锁（{1} 项由该 mod 自行管理）", modName, pair.Value.blocked));
+						ModLog.Info(string.Format("[FullUnlock] {0} 无需解锁（{1} 项由该 mod 自行管理）", modName, pair.Value.blocked));
 					}
 				}
-				Debug.Log(string.Format("[FullUnlock] 汇总：共 {0} 项已解锁（原版 {1} 项 + mod {2} 项），另有 {3} 项由对应 mod 自行管理，无需任何额外操作", vanilla + modUnlocked, vanilla, modUnlocked, modBlocked));
+				ModLog.Info(string.Format("[FullUnlock] 汇总：共 {0} 项已解锁（原版 {1} 项 + mod {2} 项），另有 {3} 项由对应 mod 自行管理，无需任何额外操作", vanilla + modUnlocked, vanilla, modUnlocked, modBlocked));
 				TickCampaignUnlock();
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError("[FullUnlockPatch] 发生错误：" + ((ex != null) ? ex.ToString() : null));
+				ModLog.Error("[FullUnlockPatch] 发生错误：" + ((ex != null) ? ex.ToString() : null));
 			}
 		}
 
@@ -157,7 +161,7 @@ namespace FullUnlockMod
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError("[FullUnlockPatch] 解锁极难难度时发生错误：" + ((ex != null) ? ex.ToString() : null));
+				ModLog.Error("[FullUnlockPatch] 解锁极难难度时发生错误：" + ((ex != null) ? ex.ToString() : null));
 				return false;
 			}
 		}
@@ -210,12 +214,12 @@ namespace FullUnlockMod
 				bool added = count > 0;
 				if (added)
 				{
-					Debug.Log(string.Format("[FullUnlock] 当前战役道具池已解锁（新增 {0} 项，可直接购买/升级）", count));
+					ModLog.Info(string.Format("[FullUnlock] 当前战役道具池已解锁（新增 {0} 项，可直接购买/升级）", count));
 				}
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError("[FullUnlockPatch] 解锁当前战役道具时发生错误：" + ((ex != null) ? ex.ToString() : null));
+				ModLog.Error("[FullUnlockPatch] 解锁当前战役道具时发生错误：" + ((ex != null) ? ex.ToString() : null));
 			}
 		}
 
@@ -284,7 +288,7 @@ namespace FullUnlockMod
 			}
 			catch (Exception ex)
 			{
-				Debug.LogWarning("[FullUnlockPatch] 读取 BepInEx 插件信息失败：" + ex.Message);
+				ModLog.Warn("[FullUnlockPatch] 读取 BepInEx 插件信息失败：" + ex.Message);
 			}
 			return assembly.GetName().Name;
 		}

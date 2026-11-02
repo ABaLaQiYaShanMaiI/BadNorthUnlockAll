@@ -52,6 +52,7 @@
     <Compile Include="FullUnlockPlugin.cs" />
     <Compile Include="Patch_OnUserSaveLoaded.cs" />
     <Compile Include="RelicUnlockPatch.cs" />
+    <Compile Include="ModLog.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

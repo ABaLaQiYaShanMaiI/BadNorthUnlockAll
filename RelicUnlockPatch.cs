@@ -32,6 +32,9 @@ namespace FullUnlockMod
 
 		private static bool reflectionWarned;
 
+		// 第二次调用（存档加载后重复执行）不再重复打印摘要
+		private static bool loggedOnce;
+
 		// BepInEx 会在插件 Awake 之前加载好全部插件程序集，所以可跨加载顺序找到该类型
 		private static Type FindRelicPluginType()
 		{
@@ -59,7 +62,7 @@ namespace FullUnlockMod
 				if (!reflectionWarned)
 				{
 					reflectionWarned = true;
-					Debug.LogWarning("[RelicUnlockPatch] 查找 Relics & Realms 程序集失败：" + ex.Message);
+					ModLog.Warn("[RelicUnlockPatch] 查找 Relics & Realms 程序集失败：" + ex.Message);
 				}
 			}
 			return null;
@@ -109,7 +112,7 @@ namespace FullUnlockMod
 			}
 			catch (Exception ex)
 			{
-				Debug.LogWarning("[RelicUnlockPatch] 读取 Relics & Realms 宝石定义失败：" + ex.Message);
+				ModLog.Warn("[RelicUnlockPatch] 读取 Relics & Realms 宝石定义失败：" + ex.Message);
 			}
 			return keys;
 		}
@@ -135,7 +138,7 @@ namespace FullUnlockMod
 				}
 				catch (Exception ex)
 				{
-					Debug.LogWarning("[RelicUnlockPatch] 读取境界数量失败：" + ex.Message);
+					ModLog.Warn("[RelicUnlockPatch] 读取境界数量失败：" + ex.Message);
 				}
 			}
 			return DefaultMaxRealm;
@@ -183,14 +186,19 @@ namespace FullUnlockMod
 			{
 				PlayerPrefs.Save();
 			}
-			string realmText = unlockRealms ? ("，境界 I-" + maxRealm + " 已解锁") : "";
-			Debug.Log(string.Format("[FullUnlock] Relics & Realms 已解锁（宝石 {0} 颗{1}；本次新写入 {2} 个键，反射到 {3} 个定义）", new object[]
+			bool shouldLog = changed > 0 || realmChanged || !loggedOnce;
+			if (shouldLog)
 			{
-				keys.Count,
-				realmText,
-				changed,
-				reflected
-			}));
+				loggedOnce = true;
+				string realmText = unlockRealms ? ("，境界 I-" + maxRealm + " 已解锁") : "";
+				ModLog.Info(string.Format("[FullUnlock] Relics & Realms 已解锁（宝石 {0} 颗{1}；本次新写入 {2} 个键，反射到 {3} 个定义）", new object[]
+				{
+					keys.Count,
+					realmText,
+					changed,
+					reflected
+				}));
+			}
 			return reflected;
 		}
 
@@ -206,7 +214,7 @@ namespace FullUnlockMod
 				}
 				catch (Exception ex)
 				{
-					Debug.LogError("[RelicUnlockPatch] 写入宝石解锁状态失败：" + ((ex != null) ? ex.ToString() : null));
+					ModLog.Error("[RelicUnlockPatch] 写入宝石解锁状态失败：" + ((ex != null) ? ex.ToString() : null));
 					yield break;
 				}
 				if (reflected <= 0)
