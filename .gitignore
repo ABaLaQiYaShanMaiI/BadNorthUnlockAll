@@ -4,6 +4,11 @@ obj/
 [Dd]ebug/
 [Rr]elease/
 
+# 本地构建产物 / 反编译与校验临时目录
+build_out/
+_decompile/
+_verify/
+
 # User-specific and generated files
 .vs/
 *.user

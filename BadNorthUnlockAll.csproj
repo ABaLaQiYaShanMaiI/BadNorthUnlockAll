@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Include="FullUnlockPatch.cs" />
     <Compile Include="FullUnlockPlugin.cs" />
+    <Compile Include="GameCompat.cs" />
     <Compile Include="Patch_OnUserSaveLoaded.cs" />
     <Compile Include="RelicUnlockPatch.cs" />
     <Compile Include="ModLog.cs" />
